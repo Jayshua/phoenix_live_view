@@ -1222,7 +1222,7 @@ export class LiveSocket {
       if(!phxEvent){ return }
       e.preventDefault()
       e.target.disabled = true
-      this.withinOwners(e.target, (view, targetCtx) => view.submitForm(e.target, targetCtx, phxEvent))
+      this.withinOwners(e.target, (view, targetCtx) => view.submitForm(e.target, targetCtx, phxEvent, e.submitter))
     }, false)
 
     for(let type of ["change", "input"]){
@@ -2718,7 +2718,15 @@ export class View {
     })
   }
 
-  pushFormSubmit(formEl, targetCtx, phxEvent, onReply){
+  pushFormSubmit(formEl, targetCtx, phxEvent, submitterOrOnReply, onReply){
+    let submitter;
+    if (typeof onReply === "undefined") {
+      onReply = submitterOrOnReply;
+      submitter = null;
+    } else {
+      submitter = submitterOrOnReply;
+    }
+
     let filterIgnored = el => {
       let userIgnored = closestPhxBinding(el, `${this.binding(PHX_UPDATE)}=ignore`, el.form)
       return !(userIgnored || closestPhxBinding(el, `data-phx-update=ignore`, el.form))
@@ -2760,7 +2768,7 @@ export class View {
       let [ref, els] = refGenerator()
       let proxyRefGen = () => [ref, els]
       this.uploadFiles(formEl, targetCtx, ref, cid, (uploads) => {
-        let formData = serializeForm(formEl, {})
+        let formData = serializeForm(formEl, submitter ? {[submitter.name]: submitter.value} : {})
         this.pushWithReply(proxyRefGen, "event", {
           type: "form",
           event: phxEvent,
@@ -2769,7 +2777,7 @@ export class View {
         }, onReply)
       })
     } else {
-      let formData = serializeForm(formEl)
+      let formData = serializeForm(formEl, submitter ? {[submitter.name]: submitter.value} : {})
       this.pushWithReply(refGenerator, "event", {
         type: "form",
         event: phxEvent,
@@ -2886,10 +2894,10 @@ export class View {
            maybe(el.closest(PHX_VIEW_SELECTOR), node => node.id) === this.id
   }
 
-  submitForm(form, targetCtx, phxEvent){
+  submitForm(form, targetCtx, phxEvent, submitter = null){
     DOM.putPrivate(form, PHX_HAS_SUBMITTED, true)
     this.liveSocket.blurActiveElement(this)
-    this.pushFormSubmit(form, targetCtx, phxEvent, () => {
+    this.pushFormSubmit(form, targetCtx, phxEvent, submitter, () => {
       this.liveSocket.restorePreviouslyActiveFocus()
     })
   }
